@@ -1,0 +1,1067 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Paysupreme</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+        h2 {
+            font-size: 18px;
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+        h3 {
+            font-size: 16px;
+            margin-top: 15px;
+            margin-bottom: 5px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        pre {
+            background-color: #2d2d2d;
+            color: #f8f8f2;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        .code-block {
+            margin-bottom: 20px;
+        }
+        ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        .sidebar {
+            width: 200px;
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: #fff;
+            padding: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .sidebar ul {
+            list-style: none;
+            padding: 0;
+        }
+        .sidebar ul li {
+            margin-bottom: 10px;
+        }
+        .sidebar ul li a {
+            text-decoration: none;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <ul>
+            <li><a href="#Paysupreme">Paysupreme</a></li>
+            <li><a href="#BaseConfiguration">Base Configuration</a></li>
+            <li><a href="#APISecurity">API Security: Request Signing</a></li>
+            <li><a href="#APIEndpoints">API Endpoints</a></li>
+            <li><a href="#Webhooks">Webhooks</a></li>
+            <li><a href="#TestingFlow">Testing Flow</a></li>
+            <li><a href="#ImportantNotes">Important Notes</a></li>
+            <li><a href="#Support">Support</a></li>
+        </ul>
+    </div>
+    <div class="container">
+        <h1>Paysupreme</h1>
+        <h2>Base Configuration</h2>
+        <ul>
+            <li><strong>Base URL</strong>: <code>https://api.paysupreme.xyz</code></li>
+            <li><strong>Demo Partner Credentials</strong>:</li>
+        </ul>
+        <div class="code-block">
+            <pre>
+{
+  "apiKey": "api_key_B9DVzVM4RsNPoum09KI4s...",
+  "apiSecret": "api_secret_5OOfn8OVQbULxW7ypOV6geYoIceLRG7I2zIJjoiIdFwSfXYWMn...2",
+  "signingSecret": "sign_aaf92ef010cedb1b3edb1d69eab190b17031e56659f22ec2507b06f1970..."
+}
+            </pre>
+        </div>
+
+        <h2>API Security: Request Signing</h2>
+        <ul>
+            <li>All JWT-protected endpoints require the following headers:</li>
+            <ul>
+                <li><code>x-signature</code>: HMAC SHA256 signature (see below)</li>
+                <li><code>x-timestamp</code>: Current UNIX timestamp (in seconds)</li>
+                <li><code>x-partner-id</code>: Your partner UUID (from profile or login response)</li>
+            </ul>
+        </ul>
+        <h3>How to generate the signature:</h3>
+        <ol>
+            <li>Concatenate the raw request body (as a string, or <code>''</code> for GET/empty body) and the <code>x-timestamp</code> value.</li>
+            <li>Compute the HMAC SHA256 digest using your <code>signingSecret</code> as the key.</li>
+            <li>Send the result as a lowercase hex string in the <code>x-signature</code> header.</li>
+        </ol>
+        <div class="code-block">
+            <pre>
+const CryptoJS = require('crypto-js');
+
+const timestamp = Math.floor(Date.now() / 1000);
+const requestBody = JSON.stringify({ /* your request body here, or '' for GET */ }) || '';
+const signSecret = 'sign_aaf92ef010cedb1b3edb1d69eab190b17031e56659f22ec2507b06f1970...';
+
+const signatureData = requestBody + timestamp;
+const signature = CryptoJS.HmacSHA256(signatureData, signSecret).toString(CryptoJS.enc.Hex);
+
+// Example headers to send:
+const headers = {
+  'Authorization': `Bearer ${accessToken}`,
+  'x-signature': signature,
+  'x-timestamp': timestamp,
+  'x-partner-id': 'your-partner-uuid',
+  'Content-Type': 'application/json',
+};
+            </pre>
+        </div>
+        <ul>
+            <li><strong>Notes:</strong>
+                <ul>
+                    <li>The <code>x-timestamp</code> must be within ±5 minutes of server time.</li>
+                    <li>The signature is required for all JWT-protected endpoints (not for <code>/auth/login</code>).</li>
+                    <li>If the body is empty (e.g., GET), use an empty string for signing.</li>
+                    <li>If you use another language, use any HMAC SHA256 library.</li>
+                </ul>
+            </li>
+        </ul>
+
+        <h2>API Endpoints</h2>
+        <h3>1. Authentication</h3>
+        <h4>Login</h4>
+        <ul>
+            <li><strong>Endpoint</strong>: <code>POST /api/v1/auth/login</code></li>
+            <li><strong>Description</strong>: Generates a bearer token for API authentication</li>
+        </ul>
+        <h5>Request Headers</h5>
+        <pre>
+Content-Type: application/json
+        </pre>
+        <h5>Request Body Format</h5>
+        <table>
+            <tr>
+                <th>Field</th>
+                <th>Type</th>
+                <th>Required</th>
+                <th>Description</th>
+            </tr>
+            <tr>
+                <td>apiKey</td>
+                <td>String</td>
+                <td>Yes</td>
+                <td>The API key provided in the partner credentials</td>
+            </tr>
+            <tr>
+                <td>apiSecret</td>
+                <td>String</td>
+                <td>Yes</td>
+                <td>The API secret provided in the partner credentials</td>
+            </tr>
+        </table>
+        <div class="code-block">
+            <pre>
+{
+  "apiKey": "api_key_B9DVzVM4RsNPoum09KI4swSB",
+  "apiSecret": "api_secret_5OOfn8OVQbULxW7ypOV6geYoIceLRG7I2zIJjoiIdFwSfXYWMn1G2"
+}
+            </pre>
+        </div>
+        <h5>Response Body Format (Success - 200)</h5>
+        <table>
+            <tr>
+                <th>Field</th>
+                <th>Type</th>
+                <th>Description</th>
+            </tr>
+            <tr>
+                <td>success</td>
+                <td>Boolean</td>
+                <td>Indicates if the login was successful</td>
+            </tr>
+            <tr>
+                <td>data</td>
+                <td>Object</td>
+                <td>Contains authentication details</td>
+            </tr>
+            <tr>
+                <td>data.accessToken</td>
+                <td>String</td>
+                <td>JWT bearer token for subsequent requests</td>
+            </tr>
+            <tr>
+                <td>data.tokenType</td>
+                <td>String</td>
+                <td>Type of token (always "Bearer")</td>
+            </tr>
+            <tr>
+                <td>data.expiresIn</td>
+                <td>Integer</td>
+                <td>Token expiration time in seconds (e.g., 3600)</td>
+            </tr>
+            <tr>
+                <td>data.partner</td>
+                <td>Object</td>
+                <td>Partner information</td>
+            </tr>
+            <tr>
+                <td>data.partner.id</td>
+                <td>String</td>
+                <td>Unique partner ID</td>
+            </tr>
+            <tr>
+                <td>data.partner.name</td>
+                <td>String</td>
+                <td>Partner name</td>
+            </tr>
+            <tr>
+                <td>data.partner.email</td>
+                <td>String</td>
+                <td>Partner email</td>
+            </tr>
+            <tr>
+                <td>data.partner.status</td>
+                <td>String</td>
+                <td>Partner status (e.g., "ACTIVE")</td>
+            </tr>
+            <tr>
+                <td>message</td>
+                <td>String</td>
+                <td>Success message</td>
+            </tr>
+        </table>
+        <div class="code-block">
+            <pre>
+{
+  "success": true,
+  "data": {
+    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "tokenType": "Bearer",
+    "expiresIn": 3600,
+    "partner": {
+      "id": "5964d55b-ba94-400e-867b-9b06d7e372da",
+      "name": "Acme Corporation",
+      "email": "admin@acme.com",
+      "status": "ACTIVE"
+    }
+  },
+  "message": "Login successful"
+}
+            </pre>
+        </div>
+        <h5>Response Body Format (Error - 401)</h5>
+        <table>
+            <tr>
+                <th>Field</th>
+                <th>Type</th>
+                <th>Description</th>
+            </tr>
+            <tr>
+                <td>success</td>
+                <td>Boolean</td>
+                <td>Indicates if the login failed</td>
+            </tr>
+            <tr>
+                <td>error</td>
+                <td>String</td>
+                <td>Error message (e.g., "Invalid API credentials")</td>
+            </tr>
+            <tr>
+                <td>statusCode</td>
+                <td>Integer</td>
+                <td>HTTP status code (e.g., 401)</td>
+            </tr>
+        </table>
+        <div class="code-block">
+            <pre>
+{
+  "success": false,
+  "error": "Invalid API credentials",
+  "statusCode": 401
+}
+            </pre>
+        </div>
+
+        <h3>2. Profile</h3>
+        <h4>Get Partner Profile & Balance</h4>
+        <ul>
+            <li><strong>Endpoint</strong>: <code>GET /api/v1/partners/me/profile</code></li>
+            <li><strong>Description</strong>: Retrieves partner profile information and current balance</li>
+        </ul>
+        <h5>Request Headers</h5>
+        <pre>
+Authorization: Bearer {accessToken}
+x-signature: {signature}
+x-timestamp: {timestamp}
+x-partner-id: {partnerId}
+Content-Type: application/json
+        </pre>
+        <h5>Request Body</h5>
+        <p>None (GET request)</p>
+        <h5>Response Body Format (Success - 200)</h5>
+        <table>
+            <tr>
+                <th>Field</th>
+                <th>Type</th>
+                <th>Description</th>
+            </tr>
+            <tr>
+                <td>data</td>
+                <td>Object</td>
+                <td>Contains partner profile details</td>
+            </tr>
+            <tr>
+                <td>data.id</td>
+                <td>String</td>
+                <td>Unique partner ID</td>
+            </tr>
+            <tr>
+                <td>data.name</td>
+                <td>String</td>
+                <td>Partner name</td>
+            </tr>
+            <tr>
+                <td>data.email</td>
+                <td>String</td>
+                <td>Partner email</td>
+            </tr>
+            <tr>
+                <td>data.status</td>
+                <td>String</td>
+                <td>Partner status (e.g., "ACTIVE")</td>
+            </tr>
+            <tr>
+                <td>data.balance</td>
+                <td>String</td>
+                <td>Current balance (e.g., "0.00")</td>
+            </tr>
+            <tr>
+                <td>data.createdAt</td>
+                <td>String</td>
+                <td>Partner creation timestamp</td>
+            </tr>
+            <tr>
+                <td>data.updatedAt</td>
+                <td>String</td>
+                <td>Partner last update timestamp</td>
+            </tr>
+            <tr>
+                <td>timestamp</td>
+                <td>String</td>
+                <td>Server timestamp of the response</td>
+            </tr>
+            <tr>
+                <td>path</td>
+                <td>String</td>
+                <td>API endpoint path</td>
+            </tr>
+        </table>
+        <div class="code-block">
+            <pre>
+{
+    "data": {
+        "id": "5964d55b-ba94-400e-867b-9b06d7e372da",
+        "name": "Acme Corporation",
+        "email": "admin@acme.com",
+        "status": "ACTIVE",
+        "balance": "0.00",
+        "createdAt": "2025-06-14T09:05:49.026Z",
+        "updatedAt": "2025-06-14T11:30:17.673Z"
+    },
+    "timestamp": "2025-06-18T15:44:26.970Z",
+    "path": "/api/v1/partners/me/profile"
+}
+            </pre>
+        </div>
+        <h5>Response Body Format (Error - 401)</h5>
+        <table>
+            <tr>
+                <th>Field</th>
+                <th>Type</th>
+                <th>Description</th>
+            </tr>
+            <tr>
+                <td>success</td>
+                <td>Boolean</td>
+                <td>Indicates if the request failed</td>
+            </tr>
+            <td>error</td>
+            <td>String</td>
+            <td>Error message (e.g., "Invalid or expired token")</td>
+            </tr>
+            <tr>
+                <td>statusCode</td>
+                <td>Integer</td>
+                <td>HTTP status code (e.g., 401)</td>
+            </tr>
+        </table>
+        <div class="code-block">
+            <pre>
+{
+  "success": false,
+  "error": "Invalid or expired token",
+  "statusCode": 401
+}
+            </pre>
+        </div>
+
+        <h3>3. Pay-in</h3>
+        <h4>Generate Payment Link</h4>
+        <ul>
+            <li><strong>Endpoint</strong>: <code>POST /api/v1/payments/payment-links</code></li>
+            <li><strong>Description</strong>: Creates a payment link for collecting payments from customers</li>
+        </ul>
+        <h5>Request Headers</h5>
+        <pre>
+Authorization: Bearer {accessToken}
+x-signature: {signature}
+x-timestamp: {timestamp}
+x-partner-id: {partnerId}
+Content-Type: application/json
+        </pre>
+        <h5>Request Body Format</h5>
+        <table>
+            <tr>
+                <th>Field</th>
+                <th>Type</th>
+                <th>Required</th>
+                <th>Description</th>
+            </tr>
+            <tr>
+                <td>amount</td>
+                <td>Integer</td>
+                <td>Yes</td>
+                <td>Amount in the smallest currency unit (e.g., 3000 for 30.00 INR)</td>
+            </tr>
+            <tr>
+                <td>purpose</td>
+                <td>String</td>
+                <td>Yes</td>
+                <td>Purpose of the payment (e.g., "Product purchase")</td>
+            </tr>
+            <tr>
+                <td>customer_name</td>
+                <td>String</td>
+                <td>Yes</td>
+                <td>Name of the customer</td>
+            </tr>
+            <tr>
+                <td>customer_phone</td>
+                <td>String</td>
+                <td>Yes</td>
+                <td>Customer's phone number</td>
+            </tr>
+            <tr>
+                <td>customer_email</td>
+                <td>String</td>
+                <td>Yes</td>
+                <td>Customer's email address</td>
+            </tr>
+            <tr>
+                <td>return_url</td>
+                <td>String</td>
+                <td>Yes</td>
+                <td>URL to redirect after payment</td>
+            </tr>
+            <tr>
+                <td>notify_url</td>
+                <td>String</td>
+                <td>Yes</td>
+                <td>Webhook URL for payment notifications</td>
+            </tr>
+            <tr>
+                <td>partner_req_id</td>
+                <td>String</td>
+                <td>Yes</td>
+                <td>Unique partner request ID</td>
+            </tr>
+        </table>
+        <div class="code-block">
+            <pre>
+{
+  "amount": 3000,
+  "purpose": "Product purchase",
+  "customer_name": "Doe Snow",
+  "customer_phone": "9876545404",
+  "customer_email": "don@example.com",
+  "return_url": "{{your-return-url}}/",
+  "notify_url": "{{your-webhook-url}}/webhooks",
+  "partner_req_id": "req_payin_00001"
+}
+            </pre>
+        </div>
+        <h5>Response Body Format (Success - 201)</h5>
+        <table>
+            <tr>
+                <th>Field</th>
+                <th>Type</th>
+                <th>Description</th>
+            </tr>
+            <tr>
+                <td>data</td>
+                <td>Object</td>
+                <td>Contains payment link details</td>
+            </tr>
+            <tr>
+                <td>data.success</td>
+                <td>Boolean</td>
+                <td>Indicates if the operation was successful</td>
+            </tr>
+            <tr>
+                <td>data.data</td>
+                <td>Object</td>
+                <td>Payment link data</td>
+            </tr>
+            <tr>
+                <td>data.data.partner_req_id</td>
+                <td>String</td>
+                <td>Partner request ID</td>
+            </tr>
+            <tr>
+                <td>data.data.transaction_id</td>
+                <td>String</td>
+                <td>Unique transaction ID</td>
+            </tr>
+            <tr>
+                <td>data.data.link_id</td>
+                <td>String</td>
+                <td>Unique payment link ID</td>
+            </tr>
+            <tr>
+                <td>data.data.link_url</td>
+                <td>String</td>
+                <td>URL for the payment link</td>
+            </tr>
+            <tr>
+                <td>data.data.link_qrcode</td>
+                <td>String</td>
+                <td>Base64 encoded QR code image</td>
+            </tr>
+            <tr>
+                <td>data.data.link_status</td>
+                <td>String</td>
+                <td>Status of the payment link (e.g., "ACTIVE")</td>
+            </tr>
+            <tr>
+                <td>data.data.link_amount</td>
+                <td>Integer</td>
+                <td>Amount of the payment link</td>
+            </tr>
+            <tr>
+                <td>data.data.link_expiry_time</td>
+                <td>String</td>
+                <td>Expiry timestamp of the payment link</td>
+            </tr>
+            <tr>
+                <td>data.message</td>
+                <td>String</td>
+                <td>Success message</td>
+            </tr>
+            <tr>
+                <td>data.metadata</td>
+                <td>Object</td>
+                <td>Additional metadata</td>
+            </tr>
+            <tr>
+                <td>timestamp</td>
+                <td>String</td>
+                <td>Server timestamp of the response</td>
+            </tr>
+            <tr>
+                <td>path</td>
+                <td>String</td>
+                <td>API endpoint path</td>
+            </tr>
+        </table>
+        <div class="code-block">
+            <pre>
+{
+  "data": {
+    "success": true,
+    "data": {
+      "partner_req_id": "req_payin_00001",
+      "transaction_id": "66dc21ab-0610-493f-bd47-381855939012",
+      "link_id": "PLNK_40d2657a_35a5_4cda_bf43_9f6df1ab1780",
+      "link_url": "https://payments.cashfree.com/links/p8ns91b038lg",
+      "link_qrcode": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAUAAAAFAAQMAAAD3XjfpAAAABlBMVEX///8AAABVwtN+AAAC4ElEQVR4nOyaMZKsPAyEmyIg5Ag+im82Zm7GUXwEhwQu9Fe3zP7M1NaLXvJsFO3ibzdQyVJLMh577LHH/q4Fo03Huic7gHMp8fSvBYlHtUtwAxCn9ilOVqJVBJsO4EVgdNAsRywFqIvtdN8Lqzk4m20dg/wMLLYzjCYrYbMHvIFmO+Mkuh+v6OkY1J051h0zw0iwmdFXv12u0cD/M+58hJ0Z913XnDwH/56a/33wsgYaz+uaWXDwq40Gzgc847ofbeedMv7pZJZT7RJMs+Uf9xhBnqUT686Cs40NBsOSo/nlkvgAc0vCQhWy2oY+QdZR5o5tPgAWnKm6+IjnXMLNPWOCvEonEDdjSuEv9OOVejE8KD+WKI/ZsdoVXWxskNAjSChHVpVkRzD2K28rQRlXqbcODVKlZPAqmQt2xLd59CB9Rk9HILuTLJ2uMkydntimEJwo0sYGw1aXjNMLLqNHdahJ1/qh7LsCsZipDAPSZhr1gOBrLsHGBt1RLeOGHQqaVpy/wqwrkELUy0uLHlVXfbEP94wIhm12zbGnKg0rfdbAulqfIHSugQYvD2sN5oL0I03xgFAm8SlYc50KDuOpT9A7OSiv+OhT7vHe9VZnRgXZ2lOIqh63JUr2HIw13/5fT2Bq1dVvhyfSAsqRT/ExJsjICbt2SJp86E6tLkcURugRbPDCWPnRHPqBqfXLBgQTFt2gaLPZzu7k5TpVIg2pDg2ynzH50dosOZrnHpbhr8anG9AzLrs404hYYbRqxWLvz9Z+RDBsdgQNAc3nPQVgHVI28sFPh6AbzyXSmnsy2qrxtlcYEgzXllUFSfbCml2bzXeHdwVqBuy7k0XbZr3Q2Ajia/IxJNgesHidsWsbDeWVu5zpD5zU2sOXJG95ZNG25LZiGxjU3tWnHiVer9wkXb/fcvUCtjvjz/nU2mve015n3KJnSNAz7jUCYTundet5vVXoEnzsscce+7P9FwAA//+y32mda5EdLAAAAABJRU5ErkJggg==",
+      "link_status": "ACTIVE",
+      "link_amount": 3000,
+      "link_expiry_time": "2025-06-18T15:59:46.000Z"
+    },
+    "message": "Payment link created successfully",
+    "metadata": {
+      "timestamp": "2025-06-18T15:44:47.239Z",
+      "partner_id": "5964d55b-ba94-400e-867b-9b06d7e372da",
+      "partner_req_id": "req_payin_00001"
+    }
+  },
+  "timestamp": "2025-06-18T15:44:47.239Z",
+  "path": "/api/v1/payments/payment-links"
+}
+            </pre>
+        </div>
+
+        <h4>Check Transaction Status</h4>
+        <ul>
+            <li><strong>Endpoint</strong>: <code>GET /api/v1/payments/txn/:partnerReqId/status</code></li>
+            <li><strong>Description</strong>: Retrieves the status and details of a specific transaction using the partner request ID.</li>
+            <li><strong>Path Parameter</strong>: <code>partnerReqId</code> (in URL path): The partner request ID to check status for.</li>
+        </ul>
+        <h5>Request Headers</h5>
+        <pre>
+Authorization: Bearer {accessToken}
+x-signature: {signature}
+x-timestamp: {timestamp}
+x-partner-id: {partnerId}
+Content-Type: application/json
+        </pre>
+        <h5>Request Body</h5>
+        <p>None (GET request)</p>
+        <h5>Response Body Format (Success - 200)</h5>
+        <table>
+            <tr>
+                <th>Field</th>
+                <th>Type</th>
+                <th>Description</th>
+            </tr>
+            <tr>
+                <td>success</td>
+                <td>Boolean</td>
+                <td>Indicates if the operation was successful</td>
+            </tr>
+            <tr>
+                <td>data</td>
+                <td>Object</td>
+                <td>Contains transaction details</td>
+            </tr>
+            <tr>
+                <td>data.transaction_id</td>
+                <td>String</td>
+                <td>Unique transaction ID</td>
+            </tr>
+            <tr>
+                <td>data.partner_req_id</td>
+                <td>String</td>
+                <td>Partner request ID</td>
+            </tr>
+            <tr>
+                <td>data.status</td>
+                <td>String</td>
+                <td>Transaction status (e.g., "SUCCESS")</td>
+            </tr>
+            <tr>
+                <td>data.amount</td>
+                <td>Integer</td>
+                <td>Transaction amount</td>
+            </tr>
+            <tr>
+                <td>data.currency</td>
+                <td>String</td>
+                <td>Currency code (e.g., "INR")</td>
+            </tr>
+            <tr>
+                <td>data.metadata</td>
+                <td>Object</td>
+                <td>Additional transaction metadata</td>
+            </tr>
+            <tr>
+                <td>message</td>
+                <td>String</td>
+                <td>Success message</td>
+            </tr>
+        </table>
+        <div class="code-block">
+            <pre>
+{
+  "success": true,
+  "data": {
+    "transaction_id": "66dc21ab-0610-493f-bd47-381855939012",
+    "partner_req_id": "req_payin_00001",
+    "status": "SUCCESS",
+    "amount": 3000,
+    "currency": "INR",
+    "metadata": {
+      "link_id": "PLNK_40d2657a_35a5_4cda_bf43_9f6df1ab1780",
+      "customer_name": "Doe Snow",
+      "customer_email": "don@example.com",
+      "customer_phone": "9876545404"
+    }
+  },
+  "message": "Transaction status retrieved successfully"
+}
+            </pre>
+        </div>
+
+        <h4>Get Pay-in Stats</h4>
+        <ul>
+            <li><strong>Endpoint</strong>: <code>GET /api/v1/payments/stats</code></li>
+            <li><strong>Description</strong>: Fetches summary statistics for the partner's pay-in and payment link transactions.</li>
+        </ul>
+        <h5>Request Headers</h5>
+        <pre>
+Authorization: Bearer {accessToken}
+x-signature: {signature}
+x-timestamp: {timestamp}
+x-partner-id: {partnerId}
+Content-Type: application/json
+        </pre>
+        <h5>Request Body</h5>
+        <p>None (GET request)</p>
+        <h5>Response Body Format (Success - 200)</h5>
+        <table>
+            <tr>
+                <th>Field</th>
+                <th>Type</th>
+                <th>Description</th>
+            </tr>
+            <tr>
+                <td>success</td>
+                <td>Boolean</td>
+                <td>Indicates if the operation was successful</td>
+            </tr>
+            <tr>
+                <td>data</td>
+                <td>Object</td>
+                <td>Contains statistical data</td>
+            </tr>
+            <tr>
+                <td>data.total_count</td>
+                <td>Integer</td>
+                <td>Total number of transactions</td>
+            </tr>
+            <tr>
+                <td>data.total_completed</td>
+                <td>Integer</td>
+                <td>Number of completed transactions</td>
+            </tr>
+            <tr>
+                <td>data.total_pending</td>
+                <td>Integer</td>
+                <td>Number of pending transactions</td>
+            </tr>
+            <tr>
+                <td>data.total_expired</td>
+                <td>Integer</td>
+                <td>Number of expired transactions</td>
+            </tr>
+            <tr>
+                <td>data.total_failed</td>
+                <td>Integer</td>
+                <td>Number of failed transactions</td>
+            </tr>
+            <tr>
+                <td>message</td>
+                <td>String</td>
+                <td>Success message</td>
+            </tr>
+        </table>
+        <div class="code-block">
+            <pre>
+{
+  "success": true,
+  "data": {
+    "total_count": 120,
+    "total_completed": 80,
+    "total_pending": 10,
+    "total_expired": 5,
+    "total_failed": 25
+  },
+  "message": "Statistics retrieved successfully"
+}
+            </pre>
+        </div>
+
+        <h2>Webhooks</h2>
+        <h3>Webhook Events</h3>
+        <ul>
+            <li>The system sends webhook notifications to your configured webhook URL for various payment events. All webhook payloads include standard headers and a signed payload for verification.</li>
+        </ul>
+        <h4>Webhook Headers</h4>
+        <pre>
+Content-Type: application/json
+x-paysupreme-signature: {hmac_sha256_signature}
+x-paysupreme-event: {webhook_event_id}
+x-paysupreme-timestamp: {unix_timestamp}
+User-Agent: PaySupreme-Webhook/1.0
+ngrok-skip-browser-warning: true
+        </pre>
+        <h4>Common Event Types</h4>
+        <ul>
+            <li><code>PAYMENT_SUCCESS</code> - Payment completed successfully</li>
+            <li><code>PAYMENT_FAILED</code> - Payment failed</li>
+            <li><code>PAYMENT_PENDING</code> - Payment is pending</li>
+            <li><code>PAYMENT_EXPIRED</code> - Payment has expired</li>
+            <li><code>PAYMENT_CANCELLED</code> - Payment has been cancelled</li>
+            <li><code>PAYMENT_LINK_PAID</code> - Payment link has been paid</li>
+            <li><code>PAYMENT_LINK_PARTIALLY_PAID</code> - Payment link partially paid</li>
+            <li><code>PAYMENT_LINK_EXPIRED</code> - Payment link has expired</li>
+            <li><code>PAYMENT_LINK_CANCELLED</code> - Payment link has been cancelled</li>
+            <li><code>PAYOUT_SUCCESS</code> - Payout completed successfully</li>
+            <li><code>PAYOUT_FAILED</code> - Payout failed</li>
+            <li><code>PAYOUT_PENDING</code> - Payout is pending</li>
+            <li><code>TRANSFER_SUCCESS</code> - Transfer completed successfully</li>
+            <li><code>TRANSFER_FAILED</code> - Transfer failed</li>
+            <li><code>REFUND_SUCCESS</code> - Refund completed successfully</li>
+            <li><code>REFUND_FAILED</code> - Refund failed</li>
+        </ul>
+        <h4>Payment Success Webhook</h4>
+        <h5>Webhook Body Format</h5>
+        <table>
+            <tr>
+                <th>Field</th>
+                <th>Type</th>
+                <th>Description</th>
+            </tr>
+            <tr>
+                <td>event</td>
+                <td>String</td>
+                <td>Event type (e.g., "PAYMENT_SUCCESS")</td>
+            </tr>
+            <tr>
+                <td>txn_type</td>
+                <td>String</td>
+                <td>Transaction type (e.g., "PAYIN")</td>
+            </tr>
+            <tr>
+                <td>transaction_id</td>
+                <td>String</td>
+                <td>Unique transaction ID</td>
+            </tr>
+            <tr>
+                <td>partner_req_id</td>
+                <td>String</td>
+                <td>Partner request ID</td>
+            </tr>
+            <tr>
+                <td>status</td>
+                <td>String</td>
+                <td>Transaction status (e.g., "SUCCESS")</td>
+            </tr>
+            <tr>
+                <td>amount</td>
+                <td>Integer</td>
+                <td>Transaction amount</td>
+            </tr>
+            <tr>
+                <td>currency</td>
+                <td>String</td>
+                <td>Currency code (e.g., "INR")</td>
+            </tr>
+            <tr>
+                <td>created_at</td>
+                <td>String</td>
+                <td>Transaction creation timestamp</td>
+            </tr>
+            <tr>
+                <td>updated_at</td>
+                <td>String</td>
+                <td>Transaction last update timestamp</td>
+            </tr>
+            <tr>
+                <td>webhook_event_id</td>
+                <td>String</td>
+                <td>Unique webhook event ID</td>
+            </tr>
+        </table>
+        <div class="code-block">
+            <pre>
+{
+  "event": "PAYMENT_SUCCESS",
+  "txn_type": "PAYIN",
+  "transaction_id": "66dc21ab-0610-493f-bd47-381855939012",
+  "partner_req_id": "req_payin_00001",
+  "status": "SUCCESS",
+  "amount": 3000,
+  "currency": "INR",
+  "created_at": "2025-06-18T15:44:47.239Z",
+  "updated_at": "2025-06-18T15:45:12.456Z",
+  "webhook_event_id": "webhook_123456789"
+}
+            </pre>
+        </div>
+        <h4>Webhook Verification</h4>
+        <div class="code-block">
+            <pre>
+const CryptoJS = require('crypto-js');
+
+const webhookPayload = JSON.stringify(request.body);
+const timestamp = request.headers['x-paysupreme-timestamp'];
+const signingSecret = 'your_signing_secret';
+
+const signatureData = webhookPayload + timestamp;
+const expectedSignature = CryptoJS.HmacSHA256(signatureData, signingSecret).toString(CryptoJS.enc.Hex);
+const receivedSignature = request.headers['x-paysupreme-signature'];
+
+if (expectedSignature === receivedSignature) {
+  // Webhook is authentic
+  console.log('Webhook verified successfully');
+} else {
+  // Webhook is not authentic
+  console.log('Webhook verification failed');
+}
+            </pre>
+        </div>
+        <ul>
+            <li><strong>Webhook Response</strong>: Your webhook endpoint should respond with a 200 status code to acknowledge receipt. The response body is optional but recommended:</li>
+        </ul>
+        <div class="code-block">
+            <pre>
+{
+  "success": true,
+  "message": "Webhook received successfully"
+}
+            </pre>
+        </div>
+        <ul>
+            <li><strong>Important Notes</strong>:
+                <ul>
+                    <li>Webhooks are retried up to 5 times with exponential backoff</li>
+                    <li>Each webhook has a unique <code>webhook_event_id</code> for tracking</li>
+                    <li>The <code>x-paysupreme-event</code> header contains the webhook event ID</li>
+                    <li>Always verify the signature before processing webhooks</li>
+                    <li>Respond quickly (within 30 seconds) to avoid timeout</li>
+                    <li>Implement idempotency using <code>webhook_event_id</code> to handle duplicate deliveries</li>
+                </ul>
+            </li>
+        </ul>
+
+        <h2>Testing Flow</h2>
+        <h3>Step 1: Authenticate</h3>
+        <ol>
+            <li>Use the login endpoint to get an access token</li>
+            <li>Save the <code>accessToken</code> from the response</li>
+        </ol>
+        <h3>Step 2: Check Profile & Balance</h3>
+        <ol>
+            <li>Use the bearer token to call the profile endpoint</li>
+            <li>Verify your balance is sufficient for transactions</li>
+        </ol>
+        <h3>Step 3: Create Payment Link</h3>
+        <ol>
+            <li>Use the bearer token to create a payment link</li>
+            <li>Use the returned <code>link_url</code> to test the payment flow</li>
+            <li>Monitor webhook events (if configured)</li>
+        </ol>
+        <h3>Step 4: Test Webhooks</h3>
+        <ol>
+            <li>Set up a webhook endpoint (e.g., using webhook.site for testing)</li>
+            <li>Configure the webhook URL in your partner profile</li>
+            <li>Make test payments and verify webhook delivery</li>
+            <li>Implement webhook signature verification</li>
+        </ol>
+
+        <h2>Important Notes</h2>
+        <h3>Authentication</h3>
+        <ul>
+            <li>All endpoints except <code>/auth/login</code> require the <code>Authorization: Bearer {token}</code> header</li>
+            <li>All JWT-protected endpoints require <code>x-signature</code>, <code>x-timestamp</code>, and <code>x-partner-id</code> headers</li>
+            <li>Tokens expire after 1 hour (3600 seconds)</li>
+            <li>Re-authenticate when you receive 401 errors</li>
+        </ul>
+        <h3>Rate Limits</h3>
+        <ul>
+            <li>API calls are rate-limited per partner</li>
+            <li>Implement proper retry logic with exponential backoff</li>
+        </ul>
+        <h3>Webhook Events</h3>
+        <ul>
+            <li>Configure webhook URLs in your partner profile</li>
+            <li>Handle webhook events for real-time payment status updates</li>
+            <li>Common events: <code>PAYMENT_SUCCESS</code>, <code>PAYMENT_FAILED</code>, <code>PAYMENT_LINK_EXPIRED</code></li>
+            <li>Always verify webhook signatures for security</li>
+            <li>Respond with 200 status code to acknowledge webhook receipt</li>
+            <li>Implement idempotency to handle duplicate webhook deliveries</li>
+        </ul>
+        <h3>Testing Best Practices</h3>
+        <ol>
+            <li>Always use unique <code>partner_req_id</code> values for idempotency and track the txn request.</li>
+            <li>Test both success and failure scenarios</li>
+            <li>Verify webhook delivery and processing</li>
+            <li>Test payment link expiry behavior</li>
+            <li>Validate all required fields before making requests</li>
+            <li>Use webhook.site or similar tools for webhook testing</li>
+            <li>Implement proper error handling for webhook processing</li>
+        </ol>
+
+        <h2>Support</h2>
+        <p>For technical support or questions about the UAT environment, please contact the development team with:</p>
+        <ul>
+            <li>API endpoint used</li>
+            <li>Request/response details</li>
+            <li>Error messages (if any)</li>
+            <li>Timestamp of the issue</li>
+            <li>Webhook event details (if applicable)</li>
+        </ul>
+    </div>
+</body>
+</html>
